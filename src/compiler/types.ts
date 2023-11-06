@@ -1,8 +1,10 @@
 import {
     BaseNodeFactory,
+    CheckMode,
     CreateSourceFileOptions,
     EmitHelperFactory,
     GetCanonicalFileName,
+    IntersectionState,
     MapLike,
     ModeAwareCache,
     ModeAwareCacheKey,
@@ -14,6 +16,7 @@ import {
     PackageJsonInfoCache,
     Pattern,
     ProgramBuildInfo,
+    RecursionFlags,
     SymlinkCache,
     ThisContainer,
 } from "./_namespaces/ts";
@@ -5279,6 +5282,11 @@ export interface TypeChecker {
     /** @internal */ getMemberOverrideModifierStatus(node: ClassLikeDeclaration, member: ClassElement, memberSymbol: Symbol): MemberOverrideStatus;
     /** @internal */ isTypeParameterPossiblyReferenced(tp: TypeParameter, node: Node): boolean;
     /** @internal */ typeHasCallOrConstructSignatures(type: Type): boolean;
+    checkBinaryLikeExpression?(left: Expression, operatorToken: BinaryOperatorToken, right: Expression, leftType: Type, rightType: Type, checkMode?: CheckMode, errorNode?: Node): Type | false | undefined;
+    checkExpression?(node: Expression | QualifiedName, checkMode: CheckMode | undefined, forceTuple?: boolean): Type | false | undefined;
+    isRelatedTo?(originalSource: Type, originalTarget: Type, recursionFlags?: RecursionFlags, reportErrors?: boolean, headMessage?: DiagnosticMessage, intersectionState?: IntersectionState): Ternary | undefined;
+    isTypeAssignableToKind(source: Type, kind: TypeFlags, strict?: boolean): boolean;
+    error(location: Node | undefined, message: DiagnosticMessage, ...args: DiagnosticArguments): Diagnostic;
 }
 
 /** @internal */
@@ -6855,8 +6863,6 @@ export const enum InferenceFlags {
  * Generally, Ternary.Maybe is used as the result of a relation that depends on itself, and
  * Ternary.Unknown is used as the result of a variance check that depends on itself. We make
  * a distinction because we don't want to cache circular variance check results.
- *
- * @internal
  */
 export const enum Ternary {
     False = 0,
@@ -6976,7 +6982,6 @@ export interface Diagnostic extends DiagnosticRelatedInformation {
     /** @internal */ skippedOn?: keyof CompilerOptions;
 }
 
-/** @internal */
 export type DiagnosticArguments = (string | number)[];
 
 /** @internal */

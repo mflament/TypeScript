@@ -1259,7 +1259,6 @@ const enum TypeSystemPropertyName {
 }
 
 // dprint-ignore
-/** @internal */
 export const enum CheckMode {
     Normal = 0,                                     // Normal type checking
     Contextual = 1 << 0,                            // Explicitly assigned contextual type, therefore not cacheable
@@ -1284,13 +1283,13 @@ export const enum SignatureCheckMode {
     Callback = BivariantCallback | StrictCallback,
 }
 
-const enum IntersectionState {
+export const enum IntersectionState {
     None = 0,
     Source = 1 << 0, // Source type is a constituent of an outer intersection
     Target = 1 << 1, // Target type is a constituent of an outer intersection
 }
 
-const enum RecursionFlags {
+export const enum RecursionFlags {
     None = 0,
     Source = 1 << 0,
     Target = 1 << 1,
@@ -1835,6 +1834,8 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
         getMemberOverrideModifierStatus,
         isTypeParameterPossiblyReferenced,
         typeHasCallOrConstructSignatures,
+        isTypeAssignableToKind,
+        error,
     };
 
     function getCandidateSignaturesForStringLiteralCompletions(call: CallLikeExpression, editingArgument: Node) {
@@ -21211,6 +21212,11 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
          * * Ternary.False if they are not related.
          */
         function isRelatedTo(originalSource: Type, originalTarget: Type, recursionFlags: RecursionFlags = RecursionFlags.Both, reportErrors = false, headMessage?: DiagnosticMessage, intersectionState = IntersectionState.None): Ternary {
+            if (checker.isRelatedTo) {
+                const result = checker.isRelatedTo(originalSource, originalTarget, recursionFlags, reportErrors, headMessage, intersectionState);
+                if (result !== undefined)
+                    return result;
+            }
             if (originalSource === originalTarget) return Ternary.True;
 
             // Before normalization: if `source` is type an object type, and `target` is primitive,
@@ -37913,6 +37919,18 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
         errorNode?: Node,
     ): Type {
         const operator = operatorToken.kind;
+
+        if (checker.checkBinaryLikeExpression) {
+            let returnType = checker.checkBinaryLikeExpression(left, operatorToken, right, leftType, rightType, checkMode, errorNode);
+            if (returnType !== undefined) {
+                if (returnType === false) {
+                    reportOperatorError();
+                    return errorType;
+                }
+                return returnType;
+            }
+        }
+        
         switch (operator) {
             case SyntaxKind.AsteriskToken:
             case SyntaxKind.AsteriskAsteriskToken:
@@ -38926,6 +38944,15 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
     }
 
     function checkExpressionWorker(node: Expression | QualifiedName, checkMode: CheckMode | undefined, forceTuple?: boolean): Type {
+        if (checker.checkExpression) {
+            const returnType = checker.checkExpression(node, checkMode, forceTuple);
+            if (returnType !== undefined) {
+                if (returnType === false)
+                    return errorType;
+                return returnType;
+            }
+        }
+
         const kind = node.kind;
         if (cancellationToken) {
             // Only bother checking on a few construct kinds.  We don't want to be excessively

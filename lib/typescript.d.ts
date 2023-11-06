@@ -6849,6 +6849,11 @@ declare namespace ts {
          * and the operation is cancelled, then it should be discarded, otherwise it is safe to keep.
          */
         runWithCancellationToken<T>(token: CancellationToken, cb: (checker: TypeChecker) => T): T;
+        checkBinaryLikeExpression?(left: Expression, operatorToken: BinaryOperatorToken, right: Expression, leftType: Type, rightType: Type, checkMode?: CheckMode, errorNode?: Node): Type | false | undefined;
+        checkExpression?(node: Expression | QualifiedName, checkMode: CheckMode | undefined, forceTuple?: boolean): Type | false | undefined;
+        isRelatedTo?(originalSource: Type, originalTarget: Type, recursionFlags?: RecursionFlags, reportErrors?: boolean, headMessage?: DiagnosticMessage, intersectionState?: IntersectionState): Ternary | undefined;
+        isTypeAssignableToKind(source: Type, kind: TypeFlags, strict?: boolean): boolean;
+        error(location: Node | undefined, message: DiagnosticMessage, ...args: DiagnosticArguments): Diagnostic;
     }
     enum NodeBuilderFlags {
         None = 0,
@@ -7366,6 +7371,20 @@ declare namespace ts {
         PriorityImpliesCombination = 416,
         Circularity = -1,
     }
+    /**
+     * Ternary values are defined such that
+     * x & y picks the lesser in the order False < Unknown < Maybe < True, and
+     * x | y picks the greater in the order False < Unknown < Maybe < True.
+     * Generally, Ternary.Maybe is used as the result of a relation that depends on itself, and
+     * Ternary.Unknown is used as the result of a variance check that depends on itself. We make
+     * a distinction because we don't want to cache circular variance check results.
+     */
+    enum Ternary {
+        False = 0,
+        Unknown = 1,
+        Maybe = 3,
+        True = -1,
+    }
     interface FileExtensionInfo {
         extension: string;
         isMixedContent: boolean;
@@ -7398,6 +7417,7 @@ declare namespace ts {
         source?: string;
         relatedInformation?: DiagnosticRelatedInformation[];
     }
+    type DiagnosticArguments = (string | number)[];
     interface DiagnosticRelatedInformation {
         category: DiagnosticCategory;
         code: number;
@@ -9724,6 +9744,27 @@ declare namespace ts {
         clear(): void;
     }
     type PerModuleNameCache = PerNonRelativeNameCache<ResolvedModuleWithFailedLookupLocations>;
+    enum CheckMode {
+        Normal = 0,
+        Contextual = 1,
+        Inferential = 2,
+        SkipContextSensitive = 4,
+        SkipGenericFunctions = 8,
+        IsForSignatureHelp = 16,
+        RestBindingElement = 32,
+        TypeOnly = 64,
+    }
+    enum IntersectionState {
+        None = 0,
+        Source = 1,
+        Target = 2,
+    }
+    enum RecursionFlags {
+        None = 0,
+        Source = 1,
+        Target = 2,
+        Both = 3,
+    }
     /**
      * Visits a Node using the supplied visitor, possibly returning a new Node in its place.
      *
